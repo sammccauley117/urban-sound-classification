@@ -35,5 +35,5 @@ By taking the Fast Fourier Transform of the samples, we can get the frequency do
 ### Spectrogram
 Finally, we will look at spectrograms of each classification. A spectrogram calculates the Fourier Transform over small snippets of the audio sample. The Fourier Transforms give us the magnitude (in this case converted to dB) with respect to frequency, but since they are taken over small time windows we also retain some time based information. Thus, we end up with a chart that shows us three different variables: frequency, magnitude, *and* time.
 <p align="center">
-  <img src="./img/spectrogram.png" width="800">
+  <img src="./img/Spectrogram.png" width="800">
 </p>
