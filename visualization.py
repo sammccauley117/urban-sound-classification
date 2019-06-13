@@ -43,6 +43,8 @@ def plot_fft(samples, sr, title='Frequency Domain'):
     fft = np.absolute(fft) # Find each frequency's magnitude
     f = np.linspace(0,sr//2,len(fft)) # Determine the frequency range vector
     plt.title(title)
+    plt.ylabel('Amplitude')
+    plt.xlabel('Frequency')
     plt.plot(f,fft)
 
 def plot_wave(samples, sr, title='Time Domain'):
@@ -56,6 +58,7 @@ def plot_wave(samples, sr, title='Time Domain'):
     librosa.display.waveplot(samples, sr=sr)
     plt.title(title)
     plt.ylim(-1,1)
+    plt.ylabel('Amplitude')
 
 def plot_spectrogram(samples, sr, title='Spectrogram'):
     '''
@@ -69,6 +72,7 @@ def plot_spectrogram(samples, sr, title='Spectrogram'):
     db = librosa.amplitude_to_db(stft, ref=np.max) # Convert the amplitudes to decibels
     librosa.display.specshow(db, y_axis='linear') # Create a spectrogram with linear frequency axis
     plt.colorbar(format='%+2.0f dB') # Configure dB color bar
+    plt.xlabel('Time')
     plt.title(title)
 
 def show_all_fft(data, random=False):
