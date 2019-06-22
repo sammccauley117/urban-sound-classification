@@ -37,3 +37,6 @@ Finally, we will look at spectrograms of each classification. A spectrogram calc
 <p align="center">
   <img src="./img/Spectrogram.png" width="800">
 </p>
+
+### Data Summary
+After viewing the data in multiple different forms, it is clear that the spectrogram conveys the most information. The time and frequency domains are powerful and valuable representations, but they each only show two dimensions of a three dimensional problem. The spectrogram, on the other hand, has all three dimensions: time, frequency, and magnitude. Ultimately, spectrograms convey the densest representation of our data. Thus, I believe that applying a Convolutional Neural Network to the spectrograms images would yield us high success.
