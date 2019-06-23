@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import glob, os
 import matplotlib.pyplot as plt
-import tensorflow as tf
-from tensorflow.keras import layers
+from tensorflow import keras
+from tensorflow.keras.layers import Dense, Conv2D, Flatten, BatchNormalization, Activation, ELU, MaxPooling2D, Dropout
 
 TRAIN_PATH = './train/train/'
 TRAIN_INDEX = './train/train.csv'
@@ -37,16 +37,16 @@ def load_data(split=.8):
     # Save the images to their directories
     init_directory(TRAIN_IMG)
     init_directory(VALIDATION_IMG)
-    # m = 0
+    m = 0
     for i, row in train_data.iterrows():
         save_spectrogram(row['ID'], row['Class'], TRAIN_IMG)
-        # m += 1
-        # if m == 20: break
-    # m = 0
+        m += 1
+        if m % 10 == 0: print('Train Progress:', m, '/', train_len)
+    m = 0
     for i, row in validation_data.iterrows():
         save_spectrogram(row['ID'], row['Class'], VALIDATION_IMG)
-        # m += 1
-        # if m == 20: break
+        m += 1
+        if m % 10 == 0: print('Validation Progress:', m, '/', int(len(data)*(1-split)))
 
 def load_wave(num, path=TRAIN_PATH):
     '''
@@ -113,4 +113,58 @@ def init_directory(dir):
             os.mkdir(dir+classification)
 
 if __name__ == '__main__':
+    # Load data to their respective image directories
     load_data()
+
+    # Set up data generator for the training data
+    train_datagen = keras.preprocessing.image.ImageDataGenerator()
+    train_generator = train_datagen.flow_from_directory(
+        directory = TRAIN_IMG,
+        target_size = (297, 98),
+        color_mode = 'rgb',
+        batch_size = 100,
+        class_mode = 'categorical',
+        shuffle = True,
+        seed = 1
+    )
+
+    # Set up data generator for the validation data
+    validation_datagen = keras.preprocessing.image.ImageDataGenerator()
+    validation_generator = validation_datagen.flow_from_directory(
+        directory = VALIDATION_IMG,
+        target_size = (297, 98),
+        color_mode = 'rgb',
+        batch_size = 100,
+        class_mode = 'categorical',
+        shuffle = True,
+        seed = 1
+    )
+
+    # Set up Convolutional Neural Network
+    model = keras.Sequential()
+    model.add(Conv2D(32, kernel_size=3, activation='relu', input_shape=(297,98,3)))
+    model.add(BatchNormalization(axis=1))
+    model.add(Activation('relu'))
+    for layer in range(3):
+        model.add(Conv2D(32, kernel_size=3))
+        model.add(BatchNormalization(axis=1))
+        model.add(ELU(alpha=1.0))
+        model.add(MaxPooling2D(pool_size=(2,2)))
+        model.add(Dropout(0.25))
+    model.add(Flatten())
+    model.add(Dense(128))
+    model.add(Activation('relu'))
+    model.add(Dropout(.5))
+    model.add(Dense(10))
+    model.add(Activation('softmax'))
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+    # Train model
+    STEP_SIZE_TRAIN=train_generator.n//train_generator.batch_size
+    STEP_SIZE_VALID=validation_generator.n//validation_generator.batch_size
+    model.fit_generator(generator=train_generator,
+        steps_per_epoch=STEP_SIZE_TRAIN,
+        validation_data=validation_generator,
+        validation_steps=STEP_SIZE_VALID,
+        epochs=10
+    )
