@@ -6,6 +6,7 @@ import glob, os
 import matplotlib.pyplot as plt
 from tensorflow import keras
 from tensorflow.keras.layers import Dense, Conv2D, Flatten, MaxPooling2D, Dropout
+from tensorflow.keras.optimizers import SGD
 import time
 
 TRAIN_PATH = './train/train/'
@@ -49,7 +50,7 @@ def load_data(split=.8):
         m += 1
         if m % 10 == 0: print('Validation Progress:', m, '/', int(len(data)*(1-split)))
 
-def load_wave(num, path=TRAIN_PATH):
+def load_wave(num, path=TRAIN_PATH, normalize=None):
     '''
     Description: loads a specific .wav file from the path. Example load_wave(5) loads 5.wav
     Args:
@@ -60,7 +61,12 @@ def load_wave(num, path=TRAIN_PATH):
         sr: the sample rate of the recording
     '''
     filename = path+str(num)+'.wav'
-    return librosa.load(filename, sr=None)
+    samples, sr = librosa.load(filename, sr=None)
+    if normalize:
+        while(len(samples)/sr < normalize):
+            samples = np.append(samples,samples)
+        samples = samples[:sr*normalize]
+    return samples, sr
 
 def save_spectrogram(num, classification, dir):
     '''
@@ -77,10 +83,9 @@ def save_spectrogram(num, classification, dir):
     y_pixels = dpi # Image height in pixels
 
     # Load the wave file and calculate the Short Time Fourier Transform
-    samples, sr = load_wave(num)
-    stft = np.absolute(librosa.stft(samples)) # Get the magnitude of the Short Time Fourier Transform
-    db = librosa.amplitude_to_db(stft, ref=np.max) # Convert the amplitudes to decibels
-    print(db)
+    samples, sr = load_wave(num, normalize=4) # Normalize all data to 4 seconds long
+    S = librosa.feature.melspectrogram(samples, sr)
+    db = librosa.power_to_db(S, ref=np.max)
 
     # Configure the matplotlib figure
     fig = plt.figure(figsize=(x_pixels//dpi, y_pixels//dpi))
@@ -90,7 +95,7 @@ def save_spectrogram(num, classification, dir):
     ax.set_frame_on(False)
 
     # Plot and save the spectrogram
-    librosa.display.specshow(db, y_axis='linear') # Create a spectrogram with linear frequency axis
+    librosa.display.specshow(db, cmap='gray_r', y_axis='mel', fmax=8000) # Create a spectrogram with mel frequency axis
     path = dir + classification + '/' + str(num) + '.jpg'
     plt.savefig(path, dpi=dpi, bbox_inches='tight',pad_inches=0)
     plt.close(fig) # Need to close to prevent unecessary memory consumtion
@@ -116,14 +121,17 @@ def init_directory(dir):
 
 if __name__ == '__main__':
     # Load data to their respective image directories
-    load_data()
+    # start = time.time()
+    # load_data()
+    # end = time.time()
+    # print('Data Collection Time:', end - start)
 
     # Set up data generator for the training data
     train_datagen = keras.preprocessing.image.ImageDataGenerator()
     train_generator = train_datagen.flow_from_directory(
         directory = TRAIN_IMG,
         target_size = (297, 98),
-        color_mode = 'rgb',
+        color_mode = 'grayscale',
         batch_size = 128,
         class_mode = 'categorical',
         shuffle = True,
@@ -134,7 +142,7 @@ if __name__ == '__main__':
     validation_generator = validation_datagen.flow_from_directory(
         directory = VALIDATION_IMG,
         target_size = (297, 98),
-        color_mode = 'rgb',
+        color_mode = 'grayscale',
         batch_size = 64,
         class_mode = 'categorical',
         shuffle = True,
@@ -142,20 +150,20 @@ if __name__ == '__main__':
 
     # Set up Convolutional Neural Network:
     model = keras.Sequential()
-    model.add(Conv2D(16, kernel_size=(5, 5), activation='relu', input_shape=(297,98,3)))
+    model.add(Conv2D(16, kernel_size=(2, 2), activation='relu', input_shape=(297,98,1)))
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Dropout(.1))
-    model.add(Conv2D(32, kernel_size=(5, 5), activation='relu'))
+    model.add(Conv2D(32, kernel_size=(2, 2), activation='relu'))
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Dropout(.1))
-    model.add(Conv2D(64, kernel_size=(5, 5), activation='relu'))
+    model.add(Conv2D(64, kernel_size=(2, 2), activation='relu'))
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Dropout(.1))
     model.add(Flatten())
     model.add(Dense(64, activation='relu'))
     model.add(Dense(10, activation='softmax'))
-    model.compile(optimizer='adadelta', loss='categorical_crossentropy', metrics=['accuracy'])
-
+    optimizer = SGD(lr=.0001)
+    model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
 
     # Train model
     start = time.time()
@@ -164,7 +172,7 @@ if __name__ == '__main__':
         steps_per_epoch = train_generator.n // train_generator.batch_size,
         validation_data = validation_generator,
         validation_steps = validation_generator.n // validation_generator.batch_size,
-        epochs = 10
+        epochs = 150
     )
     end = time.time()
     print('Training Time:', end - start)
