@@ -5,7 +5,8 @@ import pandas as pd
 import glob, os
 import matplotlib.pyplot as plt
 from tensorflow import keras
-from tensorflow.keras.layers import Dense, Conv2D, Flatten, BatchNormalization, Activation, ELU, MaxPooling2D, Dropout
+from tensorflow.keras.layers import Dense, Conv2D, Flatten, MaxPooling2D, Dropout
+import time
 
 TRAIN_PATH = './train/train/'
 TRAIN_INDEX = './train/train.csv'
@@ -79,6 +80,7 @@ def save_spectrogram(num, classification, dir):
     samples, sr = load_wave(num)
     stft = np.absolute(librosa.stft(samples)) # Get the magnitude of the Short Time Fourier Transform
     db = librosa.amplitude_to_db(stft, ref=np.max) # Convert the amplitudes to decibels
+    print(db)
 
     # Configure the matplotlib figure
     fig = plt.figure(figsize=(x_pixels//dpi, y_pixels//dpi))
@@ -122,10 +124,9 @@ if __name__ == '__main__':
         directory = TRAIN_IMG,
         target_size = (297, 98),
         color_mode = 'rgb',
-        batch_size = 100,
+        batch_size = 128,
         class_mode = 'categorical',
         shuffle = True,
-        seed = 1
     )
 
     # Set up data generator for the validation data
@@ -134,37 +135,36 @@ if __name__ == '__main__':
         directory = VALIDATION_IMG,
         target_size = (297, 98),
         color_mode = 'rgb',
-        batch_size = 100,
+        batch_size = 64,
         class_mode = 'categorical',
         shuffle = True,
-        seed = 1
     )
 
-    # Set up Convolutional Neural Network
+    # Set up Convolutional Neural Network:
     model = keras.Sequential()
-    model.add(Conv2D(32, kernel_size=3, activation='relu', input_shape=(297,98,3)))
-    model.add(BatchNormalization(axis=1))
-    model.add(Activation('relu'))
-    for layer in range(3):
-        model.add(Conv2D(32, kernel_size=3))
-        model.add(BatchNormalization(axis=1))
-        model.add(ELU(alpha=1.0))
-        model.add(MaxPooling2D(pool_size=(2,2)))
-        model.add(Dropout(0.25))
+    model.add(Conv2D(16, kernel_size=(5, 5), activation='relu', input_shape=(297,98,3)))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Dropout(.1))
+    model.add(Conv2D(32, kernel_size=(5, 5), activation='relu'))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Dropout(.1))
+    model.add(Conv2D(64, kernel_size=(5, 5), activation='relu'))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Dropout(.1))
     model.add(Flatten())
-    model.add(Dense(128))
-    model.add(Activation('relu'))
-    model.add(Dropout(.5))
-    model.add(Dense(10))
-    model.add(Activation('softmax'))
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    model.add(Dense(64, activation='relu'))
+    model.add(Dense(10, activation='softmax'))
+    model.compile(optimizer='adadelta', loss='categorical_crossentropy', metrics=['accuracy'])
+
 
     # Train model
-    STEP_SIZE_TRAIN=train_generator.n//train_generator.batch_size
-    STEP_SIZE_VALID=validation_generator.n//validation_generator.batch_size
-    model.fit_generator(generator=train_generator,
-        steps_per_epoch=STEP_SIZE_TRAIN,
-        validation_data=validation_generator,
-        validation_steps=STEP_SIZE_VALID,
-        epochs=10
+    start = time.time()
+    model.fit_generator(
+        generator = train_generator,
+        steps_per_epoch = train_generator.n // train_generator.batch_size,
+        validation_data = validation_generator,
+        validation_steps = validation_generator.n // validation_generator.batch_size,
+        epochs = 10
     )
+    end = time.time()
+    print('Training Time:', end - start)
