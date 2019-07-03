@@ -12,6 +12,7 @@ import time
 # CNN configuration
 KERNEL_SIZE = (6,6)
 POOL_SIZE = (2,2)
+DROPOUT = .1
 LEARNING_RATE = .0001
 EPOCHS = 128
 
@@ -130,6 +131,36 @@ def init_directory(dir):
         else:
             os.mkdir(dir+classification)
 
+def build_generator(dir, batch_size, color_mode='grayscale'):
+    data_generator = keras.preprocessing.image.ImageDataGenerator()
+    return data_generator.flow_from_directory(
+        directory = dir,
+        target_size = (297, 98),
+        color_mode = color_mode,
+        batch_size = batch_size,
+        class_mode = 'categorical',
+        shuffle = True,
+    )
+
+def build_model(kernel_size, pool_size, dropout, learning_rate):
+    # Set up Convolutional Neural Network:
+    model = keras.Sequential()
+    model.add(Conv2D(16, kernel_size=KERNEL_SIZE, activation='relu', input_shape=(297,98,1)))
+    model.add(MaxPooling2D(pool_size=POOL_SIZE))
+    model.add(Dropout(DROPOUT))
+    model.add(Conv2D(32, kernel_size=KERNEL_SIZE, activation='relu'))
+    model.add(MaxPooling2D(pool_size=POOL_SIZE))
+    model.add(Dropout(DROPOUT))
+    model.add(Conv2D(64, kernel_size=KERNEL_SIZE, activation='relu'))
+    model.add(MaxPooling2D(pool_size=POOL_SIZE))
+    model.add(Dropout(DROPOUT))
+    model.add(Flatten())
+    model.add(Dense(64, activation='relu'))
+    model.add(Dense(10, activation='softmax'))
+    optimizer = SGD(lr=learning_rate)
+    model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
+    return model
+
 if __name__ == '__main__':
     # Load data to their respective image directories
     # start = time.time()
@@ -137,44 +168,13 @@ if __name__ == '__main__':
     # end = time.time()
     # print('Data Collection Time:', end - start)
 
-    # Set up data generator for the training data
-    train_datagen = keras.preprocessing.image.ImageDataGenerator()
-    train_generator = train_datagen.flow_from_directory(
-        directory = TRAIN_IMG,
-        target_size = (297, 98),
-        color_mode = 'grayscale',
-        batch_size = 128,
-        class_mode = 'categorical',
-        shuffle = True,
-    )
+    # Use the test and validation image directories to set up data generators for
+    # training and validation.
+    train_generator = build_generator(TRAIN_IMG, 128)
+    validation_generator = build_generator(VALIDATION_IMG, 64)
 
-    # Set up data generator for the validation data
-    validation_datagen = keras.preprocessing.image.ImageDataGenerator()
-    validation_generator = validation_datagen.flow_from_directory(
-        directory = VALIDATION_IMG,
-        target_size = (297, 98),
-        color_mode = 'grayscale',
-        batch_size = 64,
-        class_mode = 'categorical',
-        shuffle = True,
-    )
-
-    # Set up Convolutional Neural Network:
-    model = keras.Sequential()
-    model.add(Conv2D(16, kernel_size=KERNEL_SIZE, activation='relu', input_shape=(297,98,1)))
-    model.add(MaxPooling2D(pool_size=POOL_SIZE))
-    model.add(Dropout(.1))
-    model.add(Conv2D(32, kernel_size=KERNEL_SIZE, activation='relu'))
-    model.add(MaxPooling2D(pool_size=POOL_SIZE))
-    model.add(Dropout(.1))
-    model.add(Conv2D(64, kernel_size=KERNEL_SIZE, activation='relu'))
-    model.add(MaxPooling2D(pool_size=POOL_SIZE))
-    model.add(Dropout(.1))
-    model.add(Flatten())
-    model.add(Dense(64, activation='relu'))
-    model.add(Dense(10, activation='softmax'))
-    optimizer = SGD(lr=LEARNING_RATE)
-    model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
+    # Congigure and compile a model
+    model = build_model(KERNEL_SIZE, POOL_SIZE, DROPOUT, LEARNING_RATE)
 
     # Train model
     start = time.time()
