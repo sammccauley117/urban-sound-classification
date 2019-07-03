@@ -39,12 +39,12 @@ def load_data(split=.8):
     # Save the images to their directories
     init_directory(TRAIN_IMG)
     init_directory(VALIDATION_IMG)
-    m = 0
+    m = 0 # Used for progress updates
     for i, row in train_data.iterrows():
         save_spectrogram(row['ID'], row['Class'], TRAIN_IMG)
         m += 1
         if m % 10 == 0: print('Train Progress:', m, '/', train_len)
-    m = 0
+    m = 0 # Used for progress updates
     for i, row in validation_data.iterrows():
         save_spectrogram(row['ID'], row['Class'], VALIDATION_IMG)
         m += 1
@@ -60,12 +60,17 @@ def load_wave(num, path=TRAIN_PATH, normalize=None):
         samples: a np.array of the .wav file sample data
         sr: the sample rate of the recording
     '''
+    # Load the file's samples and sample rate (sr)
     filename = path+str(num)+'.wav'
     samples, sr = librosa.load(filename, sr=None)
+
+    # Check to see if we need to normalize the duration. If so, keep doubling the
+    # sample until it surpasses the proper duration and then cut off the excess samples
     if normalize:
         while(len(samples)/sr < normalize):
-            samples = np.append(samples,samples)
-        samples = samples[:sr*normalize]
+            samples = np.append(samples,samples) # Double samples
+        samples = samples[:sr*normalize] # Cut off excess samples
+
     return samples, sr
 
 def save_spectrogram(num, classification, dir):
@@ -150,13 +155,13 @@ if __name__ == '__main__':
 
     # Set up Convolutional Neural Network:
     model = keras.Sequential()
-    model.add(Conv2D(16, kernel_size=(2, 2), activation='relu', input_shape=(297,98,1)))
+    model.add(Conv2D(16, kernel_size=(6, 6), activation='relu', input_shape=(297,98,1)))
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Dropout(.1))
-    model.add(Conv2D(32, kernel_size=(2, 2), activation='relu'))
+    model.add(Conv2D(32, kernel_size=(6, 6), activation='relu'))
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Dropout(.1))
-    model.add(Conv2D(64, kernel_size=(2, 2), activation='relu'))
+    model.add(Conv2D(64, kernel_size=(6, 6), activation='relu'))
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Dropout(.1))
     model.add(Flatten())
@@ -172,7 +177,7 @@ if __name__ == '__main__':
         steps_per_epoch = train_generator.n // train_generator.batch_size,
         validation_data = validation_generator,
         validation_steps = validation_generator.n // validation_generator.batch_size,
-        epochs = 150
+        epochs = 128
     )
     end = time.time()
     print('Training Time:', end - start)
