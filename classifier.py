@@ -9,6 +9,12 @@ from tensorflow.keras.layers import Dense, Conv2D, Flatten, MaxPooling2D, Dropou
 from tensorflow.keras.optimizers import SGD
 import time
 
+# CNN configuration
+KERNEL_SIZE = (6,6)
+POOL_SIZE = (2,2)
+LEARNING_RATE = .0001
+EPOCHS = 128
+
 TRAIN_PATH = './train/train/'
 TRAIN_INDEX = './train/train.csv'
 TRAIN_IMG = './train_img/'
@@ -155,19 +161,19 @@ if __name__ == '__main__':
 
     # Set up Convolutional Neural Network:
     model = keras.Sequential()
-    model.add(Conv2D(16, kernel_size=(6, 6), activation='relu', input_shape=(297,98,1)))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Conv2D(16, kernel_size=KERNEL_SIZE, activation='relu', input_shape=(297,98,1)))
+    model.add(MaxPooling2D(pool_size=POOL_SIZE))
     model.add(Dropout(.1))
-    model.add(Conv2D(32, kernel_size=(6, 6), activation='relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Conv2D(32, kernel_size=KERNEL_SIZE, activation='relu'))
+    model.add(MaxPooling2D(pool_size=POOL_SIZE))
     model.add(Dropout(.1))
-    model.add(Conv2D(64, kernel_size=(6, 6), activation='relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Conv2D(64, kernel_size=KERNEL_SIZE, activation='relu'))
+    model.add(MaxPooling2D(pool_size=POOL_SIZE))
     model.add(Dropout(.1))
     model.add(Flatten())
     model.add(Dense(64, activation='relu'))
     model.add(Dense(10, activation='softmax'))
-    optimizer = SGD(lr=.0001)
+    optimizer = SGD(lr=LEARNING_RATE)
     model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
 
     # Train model
@@ -177,7 +183,7 @@ if __name__ == '__main__':
         steps_per_epoch = train_generator.n // train_generator.batch_size,
         validation_data = validation_generator,
         validation_steps = validation_generator.n // validation_generator.batch_size,
-        epochs = 128
+        epochs = EPOCHS
     )
     end = time.time()
     print('Training Time:', end - start)
