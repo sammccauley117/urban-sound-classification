@@ -12,9 +12,9 @@ import time
 # CNN configuration
 KERNEL_SIZE = (6,6)
 POOL_SIZE = (2,2)
-DROPOUT = .1
-LEARNING_RATE = .0001
-EPOCHS = 128
+DROPOUT = .2
+LEARNING_RATE = .001
+EPOCHS = 256
 
 TRAIN_PATH = './train/train/'
 TRAIN_INDEX = './train/train.csv'
@@ -163,10 +163,10 @@ def build_model(kernel_size, pool_size, dropout, learning_rate):
 
 if __name__ == '__main__':
     # Load data to their respective image directories
-    # start = time.time()
-    # load_data()
-    # end = time.time()
-    # print('Data Collection Time:', end - start)
+    start = time.time()
+    load_data()
+    end = time.time()
+    print('Data Collection Time:', end - start)
 
     # Use the test and validation image directories to set up data generators for
     # training and validation.
