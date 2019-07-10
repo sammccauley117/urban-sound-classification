@@ -107,7 +107,7 @@ def save_spectrogram(num, classification, dir):
     ax.set_frame_on(False)
 
     # Plot and save the spectrogram
-    librosa.display.specshow(db, cmap='gray_r', y_axis='mel', fmax=8000) # Create a spectrogram with mel frequency axis
+    librosa.display.specshow(db, cmap='gray_r', y_axis='mel') # Create a spectrogram with mel frequency axis
     path = dir + classification + '/' + str(num) + '.jpg'
     plt.savefig(path, dpi=dpi, bbox_inches='tight',pad_inches=0)
     plt.close(fig) # Need to close to prevent unecessary memory consumtion
@@ -161,6 +161,28 @@ def build_model(kernel_size, pool_size, dropout, learning_rate):
     model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
     return model
 
+def plot_model(history, show=True, save=False, filename='accuracy.jpg'):
+    '''
+    Description: shows and/or saves a graph of the training and validation accuracy v. epoch
+    Args:
+        history: history object returned from the keras model fit function
+        show: whether or not to show the image in a window
+        save: whether or not to save the image
+        filename: what to call the saved file
+    '''
+
+    # Plot and configure graph
+    plt.plot(history.history['acc'])
+    plt.plot(history.history['val_acc'])
+    plt.title('Model accuracy')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Validation'], loc='upper right')
+
+    # Display settings
+    if save: plt.savefig(filename)
+    if show: plt.show()
+
 if __name__ == '__main__':
     # Load data to their respective image directories
     start = time.time()
@@ -171,14 +193,14 @@ if __name__ == '__main__':
     # Use the test and validation image directories to set up data generators for
     # training and validation.
     train_generator = build_generator(TRAIN_IMG, 128)
-    validation_generator = build_generator(VALIDATION_IMG, 64)
+    validation_generator = build_generator(VALIDATION_IMG, 128)
 
     # Congigure and compile a model
     model = build_model(KERNEL_SIZE, POOL_SIZE, DROPOUT, LEARNING_RATE)
 
     # Train model
     start = time.time()
-    model.fit_generator(
+    history = model.fit_generator(
         generator = train_generator,
         steps_per_epoch = train_generator.n // train_generator.batch_size,
         validation_data = validation_generator,
@@ -187,3 +209,6 @@ if __name__ == '__main__':
     )
     end = time.time()
     print('Training Time:', end - start)
+
+    # Show graph of model accuracy vs. epoch
+    plot_model(history)
