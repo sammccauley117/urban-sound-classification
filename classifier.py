@@ -132,6 +132,14 @@ def init_directory(dir):
             os.mkdir(dir+classification)
 
 def build_generator(dir, batch_size, color_mode='grayscale'):
+    '''
+    Description: creates data generators for training/validation
+    Args:
+        dir: which subdirectory to use (ex: ./train_img/ or ./validation_img/)
+        batch_size: the batch size that the generator returns
+        color_mode: either 'grayscale' or 'rgb'
+    Returns: keras data generator
+    '''
     data_generator = keras.preprocessing.image.ImageDataGenerator()
     return data_generator.flow_from_directory(
         directory = dir,
@@ -143,6 +151,17 @@ def build_generator(dir, batch_size, color_mode='grayscale'):
     )
 
 def build_model(kernel_size, pool_size, dropout, learning_rate):
+    '''
+    Description: creates, configures, and compiles a convolutional neural network
+        with tweakable hyperparameters
+    Args:
+        kernel_size: the kernel size for each convolutional layer in the form (kernel_size, kernel_size)
+        pool_size: the max pooling window size in the form (pool_size, pool_size)
+        dropout: threshold for the dropout regularization
+        learning_rate: the learning rate for the SGD optimizer
+    Returns: compiled keras model
+    '''
+
     # Set up Convolutional Neural Network:
     model = keras.Sequential()
     model.add(Conv2D(16, kernel_size=KERNEL_SIZE, activation='relu', input_shape=(297,98,1)))
