@@ -15,6 +15,7 @@ DROPOUT = .2
 LEARNING_RATE = .001
 EPOCHS = 256
 NOISE = .01
+PITCH = 5
 
 TRAIN_PATH = './train/train/'
 TRAIN_INDEX = './train/train.csv'
@@ -23,7 +24,7 @@ VALIDATION_IMG = './validation_img/'
 CLASSIFICATIONS = ['air_conditioner', 'car_horn', 'children_playing', 'dog_bark',
     'drilling', 'engine_idling', 'gun_shot', 'jackhammer', 'siren', 'street_music']
 
-def load_data(split=.8, normalize=4, noise=True):
+def load_data(split=.8, normalize=4, noise=True, pitch_shift=True):
     '''
     Description: loads the validation and training data into a their respective folders.
         For example, the './train_img/' root directory will have subdirectories for each possible classification:
@@ -43,7 +44,8 @@ def load_data(split=.8, normalize=4, noise=True):
     train_len = int(len(data)*split) # The ammount of training data is the split ratio
     train_data = data[:train_len]
     validation_data = data[train_len:]
-    if noise: train_len *= 2
+    if noise and pitch_shift: train_len *= 3
+    elif noise or pitch_shift: train_len *= 2 
 
     # Save the images to their directories
     init_directory(TRAIN_IMG)
@@ -59,6 +61,16 @@ def load_data(split=.8, normalize=4, noise=True):
             save_spectrogram(samples=noisy, sr=sr, classification=row['Class'], dir=TRAIN_IMG)
             m += 1
             if m % 10 == 0: print('Train Progress:', m, '/', train_len)
+        if pitch_shift:
+            steps = int(np.random.random_sample() * PITCH) + 1
+            if int(np.random.random_sample() * 2): steps = -steps # Randomly determine shift up vs. shift down
+            pitch_shift = librosa.effects.pitch_shift(samples, sr, n_steps=steps)
+            save_spectrogram(samples=pitch_shift, sr=sr, classification=row['Class'], dir=TRAIN_IMG)
+            m += 1
+            if m % 10 == 0: print('Train Progress:', m, '/', train_len)
+        print(row['Class'])
+        while 1:
+            x = 1
     m = 0 # Used for progress updates
     for i, row in validation_data.iterrows():
         save_spectrogram(num=row['ID'], classification=row['Class'], dir=VALIDATION_IMG)
@@ -224,26 +236,26 @@ if __name__ == '__main__':
     load_data()
     end = time.time()
     print('Data Collection Time:', end - start)
-    #
-    # # Use the test and validation image directories to set up data generators for
-    # # training and validation.
-    # train_generator = build_generator(TRAIN_IMG, 128)
-    # validation_generator = build_generator(VALIDATION_IMG, 128)
-    #
-    # # Congigure and compile a model
-    # model = build_model(KERNEL_SIZE, POOL_SIZE, DROPOUT, LEARNING_RATE)
-    #
-    # # Train model
-    # start = time.time()
-    # history = model.fit_generator(
-    #     generator = train_generator,
-    #     steps_per_epoch = train_generator.n // train_generator.batch_size,
-    #     validation_data = validation_generator,
-    #     validation_steps = validation_generator.n // validation_generator.batch_size,
-    #     epochs = EPOCHS
-    # )
-    # end = time.time()
-    # print('Training Time:', end - start)
-    #
-    # # Show graph of model accuracy vs. epoch
-    # plot_model(history)
+
+    # Use the test and validation image directories to set up data generators for
+    # training and validation.
+    train_generator = build_generator(TRAIN_IMG, 128)
+    validation_generator = build_generator(VALIDATION_IMG, 128)
+
+    # Congigure and compile a model
+    model = build_model(KERNEL_SIZE, POOL_SIZE, DROPOUT, LEARNING_RATE)
+
+    # Train model
+    start = time.time()
+    history = model.fit_generator(
+        generator = train_generator,
+        steps_per_epoch = train_generator.n // train_generator.batch_size,
+        validation_data = validation_generator,
+        validation_steps = validation_generator.n // validation_generator.batch_size,
+        epochs = EPOCHS
+    )
+    end = time.time()
+    print('Training Time:', end - start)
+
+    # Show graph of model accuracy vs. epoch
+    plot_model(history)
