@@ -2,12 +2,11 @@ import librosa
 import librosa.display
 import numpy as np
 import pandas as pd
-import glob, os
+import glob, os, time, uuid
 import matplotlib.pyplot as plt
 from tensorflow import keras
 from tensorflow.keras.layers import Dense, Conv2D, Flatten, MaxPooling2D, Dropout
 from tensorflow.keras.optimizers import SGD
-import time
 
 # CNN configuration
 KERNEL_SIZE = (6,6)
@@ -48,20 +47,21 @@ def load_data(split=.8):
     init_directory(VALIDATION_IMG)
     m = 0 # Used for progress updates
     for i, row in train_data.iterrows():
-        save_spectrogram(row['ID'], row['Class'], TRAIN_IMG)
+        save_spectrogram(num=row['ID'], classification=row['Class'], dir=TRAIN_IMG)
         m += 1
         if m % 10 == 0: print('Train Progress:', m, '/', train_len)
     m = 0 # Used for progress updates
     for i, row in validation_data.iterrows():
-        save_spectrogram(row['ID'], row['Class'], VALIDATION_IMG)
+        save_spectrogram(num=row['ID'], classification=row['Class'], dir=VALIDATION_IMG)
         m += 1
         if m % 10 == 0: print('Validation Progress:', m, '/', int(len(data)*(1-split)))
 
-def load_wave(num, path=TRAIN_PATH, normalize=None):
+def load_wave(num, normalize=None, path=TRAIN_PATH):
     '''
     Description: loads a specific .wav file from the path. Example load_wave(5) loads 5.wav
     Args:
         index: number of which .wav file to load
+        normalize: length in time to normalize the sample to--does not normalize if None
         path: parent path (./train/train/)
     Returns:
         samples: a np.array of the .wav file sample data
@@ -80,7 +80,7 @@ def load_wave(num, path=TRAIN_PATH, normalize=None):
 
     return samples, sr
 
-def save_spectrogram(num, classification, dir):
+def save_spectrogram(num=None, samples=None, sr=None, classification=None, dir='./', normalize=4):
     '''
     Description: saves spectrogram image of the given file index to the correct classification subfolder
     Args:
@@ -93,9 +93,16 @@ def save_spectrogram(num, classification, dir):
     dpi = 128 # Figure pixel density
     x_pixels = dpi*3 # Image width in pixels
     y_pixels = dpi # Image height in pixels
+    filename = str(num) if (num is not None) else str(uuid.uuid4()) # Uses the file number that was passed if possible
+    if classification:
+        path = dir + classification + '/' + filename + '.jpg'
+    else:
+        path = dir + filename + '.jpg'
 
-    # Load the wave file and calculate the Short Time Fourier Transform
-    samples, sr = load_wave(num, normalize=4) # Normalize all data to 4 seconds long
+    # Load the wave file from file number if the number was passed
+    if num is not None: samples, sr = load_wave(num, normalize)
+
+    # Calculate the Short Time Fourier Transform
     S = librosa.feature.melspectrogram(samples, sr)
     db = librosa.power_to_db(S, ref=np.max)
 
@@ -108,7 +115,6 @@ def save_spectrogram(num, classification, dir):
 
     # Plot and save the spectrogram
     librosa.display.specshow(db, cmap='gray_r', y_axis='mel') # Create a spectrogram with mel frequency axis
-    path = dir + classification + '/' + str(num) + '.jpg'
     plt.savefig(path, dpi=dpi, bbox_inches='tight',pad_inches=0)
     plt.close(fig) # Need to close to prevent unecessary memory consumtion
 
