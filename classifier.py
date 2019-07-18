@@ -11,11 +11,12 @@ from tensorflow.keras.optimizers import SGD
 # CNN configuration
 KERNEL_SIZE = (6,6)
 POOL_SIZE = (2,2)
-DROPOUT = .2
+DROPOUT = .5
 LEARNING_RATE = .001
-EPOCHS = 256
+EPOCHS = 1024
 NOISE = .01
 PITCH = 5
+COLOR = True
 
 TRAIN_PATH = './train/train/'
 TRAIN_INDEX = './train/train.csv'
@@ -45,7 +46,7 @@ def load_data(split=.8, normalize=4, noise=True, pitch_shift=True):
     train_data = data[:train_len]
     validation_data = data[train_len:]
     if noise and pitch_shift: train_len *= 3
-    elif noise or pitch_shift: train_len *= 2 
+    elif noise or pitch_shift: train_len *= 2
 
     # Save the images to their directories
     init_directory(TRAIN_IMG)
@@ -64,13 +65,10 @@ def load_data(split=.8, normalize=4, noise=True, pitch_shift=True):
         if pitch_shift:
             steps = int(np.random.random_sample() * PITCH) + 1
             if int(np.random.random_sample() * 2): steps = -steps # Randomly determine shift up vs. shift down
-            pitch_shift = librosa.effects.pitch_shift(samples, sr, n_steps=steps)
-            save_spectrogram(samples=pitch_shift, sr=sr, classification=row['Class'], dir=TRAIN_IMG)
+            shifted = librosa.effects.pitch_shift(samples, sr, n_steps=steps)
+            save_spectrogram(samples=shifted, sr=sr, classification=row['Class'], dir=TRAIN_IMG)
             m += 1
             if m % 10 == 0: print('Train Progress:', m, '/', train_len)
-        print(row['Class'])
-        while 1:
-            x = 1
     m = 0 # Used for progress updates
     for i, row in validation_data.iterrows():
         save_spectrogram(num=row['ID'], classification=row['Class'], dir=VALIDATION_IMG)
@@ -95,10 +93,15 @@ def load_wave(num, normalize=4, path=TRAIN_PATH):
     # Check to see if we need to normalize the duration. If so, keep doubling the
     # sample until it surpasses the proper duration and then cut off the excess samples
     if normalize:
-        while(len(samples)/sr < normalize):
-            samples = np.append(samples,samples) # Double samples
-        samples = samples[:sr*normalize] # Cut off excess samples
-
+        duration = len(samples) / sr
+        if duration > normalize:
+            print('-->',num)
+            return samples[:int(len(samples)/sr)], sr
+        elif duration == normalize:
+            return samples, sr
+        else:
+            zeros = np.zeros((sr*normalize) - len(samples))
+            return np.hstack((samples, zeros)), sr
     return samples, sr
 
 def save_spectrogram(num=None, samples=None, sr=None, classification=None, dir='./', normalize=4):
@@ -112,32 +115,29 @@ def save_spectrogram(num=None, samples=None, sr=None, classification=None, dir='
     TODO: right now the pixel settings aren't working right: 384x128 is actually saved as 297x98
     '''
     # Variable initialization
-    dpi = 128 # Figure pixel density
-    x_pixels = dpi*3 # Image width in pixels
-    y_pixels = dpi # Image height in pixels
     filename = str(num) if (num is not None) else str(uuid.uuid4()) # Uses the file number that was passed if possible
     if classification:
         path = dir + classification + '/' + filename + '.jpg'
     else:
         path = dir + filename + '.jpg'
 
-    # Load the wave file from file number if the number was passed
-    if num is not None: samples, sr = load_wave(num, normalize)
-
     # Calculate the Short Time Fourier Transform
     S = librosa.feature.melspectrogram(samples, sr)
     db = librosa.power_to_db(S, ref=np.max)
 
     # Configure the matplotlib figure
-    fig = plt.figure(figsize=(x_pixels//dpi, y_pixels//dpi))
+    fig = plt.figure(figsize=(1,1))
     ax = fig.add_subplot(111)
     ax.axes.get_xaxis().set_visible(False)
     ax.axes.get_yaxis().set_visible(False)
     ax.set_frame_on(False)
 
     # Plot and save the spectrogram
-    librosa.display.specshow(db, cmap='gray_r', y_axis='mel') # Create a spectrogram with mel frequency axis
-    plt.savefig(path, dpi=dpi, bbox_inches='tight',pad_inches=0)
+    if COLOR:
+        librosa.display.specshow(db, y_axis='mel') # Create a spectrogram with mel frequency axis
+    else:
+        librosa.display.specshow(db, cmap='gray_r', y_axis='mel') # Create a spectrogram with mel frequency axis
+    plt.savefig(path, bbox_inches='tight',pad_inches=0)
     plt.close(fig) # Need to close to prevent unecessary memory consumtion
 
 def init_directory(dir):
@@ -159,7 +159,7 @@ def init_directory(dir):
         else:
             os.mkdir(dir+classification)
 
-def build_generator(dir, batch_size, color_mode='grayscale'):
+def build_generator(dir, batch_size):
     '''
     Description: creates data generators for training/validation
     Args:
@@ -168,10 +168,11 @@ def build_generator(dir, batch_size, color_mode='grayscale'):
         color_mode: either 'grayscale' or 'rgb'
     Returns: keras data generator
     '''
+    color_mode = 'rgb' if COLOR else 'grayscale'
     data_generator = keras.preprocessing.image.ImageDataGenerator()
     return data_generator.flow_from_directory(
         directory = dir,
-        target_size = (297, 98),
+        target_size = (77, 77),
         color_mode = color_mode,
         batch_size = batch_size,
         class_mode = 'categorical',
@@ -189,12 +190,13 @@ def build_model(kernel_size, pool_size, dropout, learning_rate):
         learning_rate: the learning rate for the SGD optimizer
     Returns: compiled keras model
     '''
+    shape_depth = 3 if COLOR else 1
 
     # Set up Convolutional Neural Network:
     model = keras.Sequential()
-    model.add(Conv2D(16, kernel_size=KERNEL_SIZE, activation='relu', input_shape=(297,98,1)))
+    model.add(Conv2D(16, kernel_size=KERNEL_SIZE, activation='relu', input_shape=(77,77,shape_depth)))
     model.add(MaxPooling2D(pool_size=POOL_SIZE))
-    model.add(Dropout(DROPOUT))
+    model.add(Dropout(.2))
     model.add(Conv2D(32, kernel_size=KERNEL_SIZE, activation='relu'))
     model.add(MaxPooling2D(pool_size=POOL_SIZE))
     model.add(Dropout(DROPOUT))
@@ -203,6 +205,7 @@ def build_model(kernel_size, pool_size, dropout, learning_rate):
     model.add(Dropout(DROPOUT))
     model.add(Flatten())
     model.add(Dense(64, activation='relu'))
+    model.add(Dense(128, activation='relu'))
     model.add(Dense(10, activation='softmax'))
     optimizer = SGD(lr=learning_rate)
     model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
@@ -224,7 +227,7 @@ def plot_model(history, show=True, save=False, filename='accuracy.jpg'):
     plt.title('Model accuracy')
     plt.ylabel('Accuracy')
     plt.xlabel('Epoch')
-    plt.legend(['Train', 'Validation'], loc='upper right')
+    plt.legend(['Train', 'Validation'], loc='upper left')
 
     # Display settings
     if save: plt.savefig(filename)
@@ -233,14 +236,14 @@ def plot_model(history, show=True, save=False, filename='accuracy.jpg'):
 if __name__ == '__main__':
     # Load data to their respective image directories
     start = time.time()
-    load_data()
+    load_data(noise=False, pitch_shift=False)
     end = time.time()
     print('Data Collection Time:', end - start)
 
     # Use the test and validation image directories to set up data generators for
     # training and validation.
-    train_generator = build_generator(TRAIN_IMG, 128)
-    validation_generator = build_generator(VALIDATION_IMG, 128)
+    train_generator = build_generator(TRAIN_IMG, 32)
+    validation_generator = build_generator(VALIDATION_IMG, 32)
 
     # Congigure and compile a model
     model = build_model(KERNEL_SIZE, POOL_SIZE, DROPOUT, LEARNING_RATE)
