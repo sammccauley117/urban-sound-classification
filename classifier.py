@@ -27,7 +27,10 @@ parser.add_argument('--no-normalize', dest='normalize', action='store_false', he
 parser.add_argument('--no-color', dest='color', action='store_false', help='Forces the images to be saved as grayscale')
 args = parser.parse_args()
 
-print(args)
+# Show all arguments 
+for key, value in vars(args).items():
+    print(key, '=', value)
+print()
 
 # Global variables
 TRAIN_PATH = './train/train/'
@@ -102,7 +105,6 @@ def load_wave(num, path=TRAIN_PATH):
     if args.normalize:
         duration = len(samples) / sr
         if duration > NORMALIZE_LEN:
-            print('oh no')
             return samples[:int(NORMALIZE_LEN*sr)], sr
         elif duration == NORMALIZE_LEN:
             return samples, sr
