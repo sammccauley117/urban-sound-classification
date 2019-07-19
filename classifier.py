@@ -1,31 +1,44 @@
+import glob, os, time, uuid, argparse
 import librosa
 import librosa.display
 import numpy as np
 import pandas as pd
-import glob, os, time, uuid
 import matplotlib.pyplot as plt
 from tensorflow import keras
 from tensorflow.keras.layers import Dense, Conv2D, Flatten, MaxPooling2D, Dropout
 from tensorflow.keras.optimizers import SGD
 
-# CNN configuration
-KERNEL_SIZE = (6,6)
-POOL_SIZE = (2,2)
-DROPOUT = .5
-LEARNING_RATE = .001
-EPOCHS = 1024
-NOISE = .01
-PITCH = 5
-COLOR = True
+# Set up and parse command line arguments
+parser = argparse.ArgumentParser(description='Create a video of a .wav file\'s audio spectrum')
+parser.add_argument('-s', '--split', type=float, default=.8, help='Train : Validation split ratio (default: .8)')
+parser.add_argument('-b', '--batchsize', type=int, default=32, help='Batch size (default: 32)')
+parser.add_argument('-k', '--kernel', nargs='+', type=int, default=[6,6], help='Kernel window size (defualt: (6,6))')
+parser.add_argument('-p', '--pool', nargs='+', type=int, default=[2,2], help='Max pooling size (defualt: (2,2))')
+parser.add_argument('-d', '--dropout', type=float, default=.5, help='Dropout threshold (default: .5)')
+parser.add_argument('-l', '--learningrate', type=float, default=.001, help='Learning rate (default: .001)')
+parser.add_argument('-e', '--epochs', type=int, default=512, help='Number of epochs (default: 512)')
+parser.add_argument('-N', '--noise', type=float, default=0, help='How much noise to add to the training data (default: 0)')
+parser.add_argument('-P', '--pitch', type=float, default=0, help='Amplitude of pitch shifting applied to the data (default: 0)')
+parser.add_argument('--load', default=True)
+parser.add_argument('--normalize', default=True)
+parser.add_argument('--color', default=True)
+parser.add_argument('--no-load', dest='load', action='store_false', help='Prevents the image directories from being overwritten')
+parser.add_argument('--no-normalize', dest='normalize', action='store_false', help='Prevents audio clips from being normalized to four seconds')
+parser.add_argument('--no-color', dest='color', action='store_false', help='Forces the images to be saved as grayscale')
+args = parser.parse_args()
 
+print(args)
+
+# Global variables
 TRAIN_PATH = './train/train/'
 TRAIN_INDEX = './train/train.csv'
 TRAIN_IMG = './train_img/'
 VALIDATION_IMG = './validation_img/'
 CLASSIFICATIONS = ['air_conditioner', 'car_horn', 'children_playing', 'dog_bark',
     'drilling', 'engine_idling', 'gun_shot', 'jackhammer', 'siren', 'street_music']
+NORMALIZE_LEN = 4
 
-def load_data(split=.8, normalize=4, noise=True, pitch_shift=True):
+def load_data():
     '''
     Description: loads the validation and training data into a their respective folders.
         For example, the './train_img/' root directory will have subdirectories for each possible classification:
@@ -33,20 +46,16 @@ def load_data(split=.8, normalize=4, noise=True, pitch_shift=True):
         - ./train_img/car_horn/
         - ./train_img/children_playing/
         - etc.
-    Args:
-        split: the ratio at which to split the data for testing and traing
-            for example, a split of .8 means that 80% of the data will be for training
-            and 20% for validation
     '''
     # Read the index file and split the data into a test set and a train set
     data = pd.read_csv(TRAIN_INDEX)
     data = data.reindex(np.random.permutation(data.index)) # Randomly rearrange the data
-    validation_len = len(data)*(1-split) # The ammount of validation data
-    train_len = int(len(data)*split) # The ammount of training data is the split ratio
+    validation_len = len(data)*(1-args.split) # The ammount of validation data
+    train_len = int(len(data)*args.split) # The ammount of training data is the split ratio
     train_data = data[:train_len]
     validation_data = data[train_len:]
-    if noise and pitch_shift: train_len *= 3
-    elif noise or pitch_shift: train_len *= 2
+    if args.noise and args.pitch: train_len *= 3
+    elif args.noise or args.pitch: train_len *= 2
 
     # Save the images to their directories
     init_directory(TRAIN_IMG)
@@ -57,13 +66,13 @@ def load_data(split=.8, normalize=4, noise=True, pitch_shift=True):
         save_spectrogram(samples=samples, sr=sr, num=row['ID'], classification=row['Class'], dir=TRAIN_IMG)
         m += 1
         if m % 10 == 0: print('Train Progress:', m, '/', train_len)
-        if noise:
-            noisy = np.random.normal(0, NOISE, len(samples)) + samples
+        if args.noise:
+            noisy = np.random.normal(0, args.noise, len(samples)) + samples
             save_spectrogram(samples=noisy, sr=sr, classification=row['Class'], dir=TRAIN_IMG)
             m += 1
             if m % 10 == 0: print('Train Progress:', m, '/', train_len)
-        if pitch_shift:
-            steps = int(np.random.random_sample() * PITCH) + 1
+        if args.pitch:
+            steps = int(np.random.random_sample() * args.pitch) + 1
             if int(np.random.random_sample() * 2): steps = -steps # Randomly determine shift up vs. shift down
             shifted = librosa.effects.pitch_shift(samples, sr, n_steps=steps)
             save_spectrogram(samples=shifted, sr=sr, classification=row['Class'], dir=TRAIN_IMG)
@@ -73,15 +82,14 @@ def load_data(split=.8, normalize=4, noise=True, pitch_shift=True):
     for i, row in validation_data.iterrows():
         save_spectrogram(num=row['ID'], classification=row['Class'], dir=VALIDATION_IMG)
         m += 1
-        if m % 10 == 0: print('Validation Progress:', m, '/', int(len(data)*(1-split)))
+        if m % 10 == 0: print('Validation Progress:', m, '/', int(len(data)*(1-args.split)))
 
-def load_wave(num, normalize=4, path=TRAIN_PATH):
+def load_wave(num, path=TRAIN_PATH):
     '''
     Description: loads a specific .wav file from the path. Example load_wave(5) loads 5.wav
     Args:
         index: number of which .wav file to load
-        normalize: length in time to normalize the sample to--does not normalize if None
-        path: parent path (./train/train/)
+        path: root path (ex: ./train/train/)
     Returns:
         samples: a np.array of the .wav file sample data
         sr: the sample rate of the recording
@@ -90,21 +98,20 @@ def load_wave(num, normalize=4, path=TRAIN_PATH):
     filename = path+str(num)+'.wav'
     samples, sr = librosa.load(filename, sr=None)
 
-    # Check to see if we need to normalize the duration. If so, keep doubling the
-    # sample until it surpasses the proper duration and then cut off the excess samples
-    if normalize:
+    # Check to see if we need to normalize the duration of each clip to [NORMALIZE_LEN] seconds long
+    if args.normalize:
         duration = len(samples) / sr
-        if duration > normalize:
-            print('-->',num)
-            return samples[:int(len(samples)/sr)], sr
-        elif duration == normalize:
+        if duration > NORMALIZE_LEN:
+            print('oh no')
+            return samples[:int(NORMALIZE_LEN*sr)], sr
+        elif duration == NORMALIZE_LEN:
             return samples, sr
         else:
-            zeros = np.zeros((sr*normalize) - len(samples))
+            zeros = np.zeros((NORMALIZE_LEN*sr) - len(samples))
             return np.hstack((samples, zeros)), sr
     return samples, sr
 
-def save_spectrogram(num=None, samples=None, sr=None, classification=None, dir='./', normalize=4):
+def save_spectrogram(num=None, samples=None, sr=None, classification=None, dir='./'):
     '''
     Description: saves spectrogram image of the given file index to the correct classification subfolder
     Args:
@@ -133,7 +140,7 @@ def save_spectrogram(num=None, samples=None, sr=None, classification=None, dir='
     ax.set_frame_on(False)
 
     # Plot and save the spectrogram
-    if COLOR:
+    if args.color:
         librosa.display.specshow(db, y_axis='mel') # Create a spectrogram with mel frequency axis
     else:
         librosa.display.specshow(db, cmap='gray_r', y_axis='mel') # Create a spectrogram with mel frequency axis
@@ -165,10 +172,9 @@ def build_generator(dir, batch_size):
     Args:
         dir: which subdirectory to use (ex: ./train_img/ or ./validation_img/)
         batch_size: the batch size that the generator returns
-        color_mode: either 'grayscale' or 'rgb'
     Returns: keras data generator
     '''
-    color_mode = 'rgb' if COLOR else 'grayscale'
+    color_mode = 'rgb' if args.color else 'grayscale'
     data_generator = keras.preprocessing.image.ImageDataGenerator()
     return data_generator.flow_from_directory(
         directory = dir,
@@ -179,35 +185,34 @@ def build_generator(dir, batch_size):
         shuffle = True,
     )
 
-def build_model(kernel_size, pool_size, dropout, learning_rate):
+def build_model():
     '''
     Description: creates, configures, and compiles a convolutional neural network
         with tweakable hyperparameters
-    Args:
-        kernel_size: the kernel size for each convolutional layer in the form (kernel_size, kernel_size)
-        pool_size: the max pooling window size in the form (pool_size, pool_size)
-        dropout: threshold for the dropout regularization
-        learning_rate: the learning rate for the SGD optimizer
     Returns: compiled keras model
     '''
-    shape_depth = 3 if COLOR else 1
+    shape_depth = 3 if args.color else 1
+    kernel_size = tuple(args.kernel)
+    pool_size = tuple(args.pool)
+    dropout = args.dropout
+    lr = args.learningrate
 
     # Set up Convolutional Neural Network:
     model = keras.Sequential()
-    model.add(Conv2D(16, kernel_size=KERNEL_SIZE, activation='relu', input_shape=(77,77,shape_depth)))
-    model.add(MaxPooling2D(pool_size=POOL_SIZE))
+    model.add(Conv2D(16, kernel_size=kernel_size, activation='relu', input_shape=(77,77,shape_depth)))
+    model.add(MaxPooling2D(pool_size=pool_size))
     model.add(Dropout(.2))
-    model.add(Conv2D(32, kernel_size=KERNEL_SIZE, activation='relu'))
-    model.add(MaxPooling2D(pool_size=POOL_SIZE))
-    model.add(Dropout(DROPOUT))
-    model.add(Conv2D(64, kernel_size=KERNEL_SIZE, activation='relu'))
-    model.add(MaxPooling2D(pool_size=POOL_SIZE))
-    model.add(Dropout(DROPOUT))
+    model.add(Conv2D(32, kernel_size=kernel_size, activation='relu'))
+    model.add(MaxPooling2D(pool_size=pool_size))
+    model.add(Dropout(dropout))
+    model.add(Conv2D(64, kernel_size=kernel_size, activation='relu'))
+    model.add(MaxPooling2D(pool_size=pool_size))
+    model.add(Dropout(dropout))
     model.add(Flatten())
     model.add(Dense(64, activation='relu'))
     model.add(Dense(128, activation='relu'))
     model.add(Dense(10, activation='softmax'))
-    optimizer = SGD(lr=learning_rate)
+    optimizer = SGD(lr=lr)
     model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
     return model
 
@@ -220,7 +225,6 @@ def plot_model(history, show=True, save=False, filename='accuracy.jpg'):
         save: whether or not to save the image
         filename: what to call the saved file
     '''
-
     # Plot and configure graph
     plt.plot(history.history['acc'])
     plt.plot(history.history['val_acc'])
@@ -235,18 +239,18 @@ def plot_model(history, show=True, save=False, filename='accuracy.jpg'):
 
 if __name__ == '__main__':
     # Load data to their respective image directories
-    start = time.time()
-    load_data(noise=False, pitch_shift=False)
-    end = time.time()
-    print('Data Collection Time:', end - start)
+    if args.load:
+        start = time.time()
+        load_data()
+        end = time.time()
+        print('Data Collection Time:', end - start)
 
-    # Use the test and validation image directories to set up data generators for
-    # training and validation.
-    train_generator = build_generator(TRAIN_IMG, 32)
-    validation_generator = build_generator(VALIDATION_IMG, 32)
+    # Use the test and validation image directories to set up data generators for training and validation.
+    train_generator = build_generator(TRAIN_IMG, args.batchsize)
+    validation_generator = build_generator(VALIDATION_IMG, args.batchsize)
 
     # Congigure and compile a model
-    model = build_model(KERNEL_SIZE, POOL_SIZE, DROPOUT, LEARNING_RATE)
+    model = build_model()
 
     # Train model
     start = time.time()
@@ -255,7 +259,7 @@ if __name__ == '__main__':
         steps_per_epoch = train_generator.n // train_generator.batch_size,
         validation_data = validation_generator,
         validation_steps = validation_generator.n // validation_generator.batch_size,
-        epochs = EPOCHS
+        epochs = args.epochs
     )
     end = time.time()
     print('Training Time:', end - start)
