@@ -27,7 +27,7 @@ parser.add_argument('--no-normalize', dest='normalize', action='store_false', he
 parser.add_argument('--no-color', dest='color', action='store_false', help='Forces the images to be saved as grayscale')
 args = parser.parse_args()
 
-# Show all arguments 
+# Show all arguments
 for key, value in vars(args).items():
     print(key, '=', value)
 print()
@@ -83,7 +83,8 @@ def load_data():
             if m % 10 == 0: print('Train Progress:', m, '/', train_len)
     m = 0 # Used for progress updates
     for i, row in validation_data.iterrows():
-        save_spectrogram(num=row['ID'], classification=row['Class'], dir=VALIDATION_IMG)
+        samples, sr = load_wave(row['ID'])
+        save_spectrogram(samples=samples, sr=sr, num=row['ID'], classification=row['Class'], dir=VALIDATION_IMG)
         m += 1
         if m % 10 == 0: print('Validation Progress:', m, '/', int(len(data)*(1-args.split)))
 
