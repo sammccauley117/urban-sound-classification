@@ -4,12 +4,14 @@ import librosa.display
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import h5py
 from tensorflow import keras
 from tensorflow.keras.layers import Dense, Conv2D, Flatten, MaxPooling2D, Dropout
 from tensorflow.keras.optimizers import SGD
 
 # Set up and parse command line arguments
 parser = argparse.ArgumentParser(description='Create a video of a .wav file\'s audio spectrum')
+parser.add_argument('-f', '--filename', type=str, default='', help='Filename of the accuracy plot and saved model')
 parser.add_argument('-s', '--split', type=float, default=.8, help='Train : Validation split ratio (default: .8)')
 parser.add_argument('-b', '--batchsize', type=int, default=32, help='Batch size (default: 32)')
 parser.add_argument('-k', '--kernel', nargs='+', type=int, default=[6,6], help='Kernel window size (defualt: (6,6))')
@@ -234,6 +236,7 @@ def plot_model(history, show=True, save=False, filename='accuracy.jpg'):
     plt.title('Model accuracy')
     plt.ylabel('Accuracy')
     plt.xlabel('Epoch')
+    plt.ylim((0,1))
     plt.legend(['Train', 'Validation'], loc='upper left')
 
     # Display settings
@@ -267,5 +270,9 @@ if __name__ == '__main__':
     end = time.time()
     print('Training Time:', end - start)
 
-    # Show graph of model accuracy vs. epoch
-    plot_model(history)
+    # Save model and show graph of model accuracy vs. epoch
+    if args.filename:
+        model.save(args.filename+'.h5')
+        plot_model(history, save=True, filename=args.filename+'.jpg')
+    else:
+        plot_model(history)
