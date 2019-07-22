@@ -43,8 +43,8 @@ def plot_fft(samples, sr, title='Frequency Domain'):
     fft = np.absolute(fft) # Find each frequency's magnitude
     f = np.linspace(0,sr//2,len(fft)) # Determine the frequency range vector
     plt.title(title)
+    plt.xlabel('Frequency [Hz]')
     plt.ylabel('Amplitude')
-    plt.xlabel('Frequency')
     plt.plot(f,fft)
 
 def plot_wave(samples, sr, title='Time Domain'):
@@ -58,6 +58,7 @@ def plot_wave(samples, sr, title='Time Domain'):
     librosa.display.waveplot(samples, sr=sr)
     plt.title(title)
     plt.ylim(-1,1)
+    plt.xlabel('Time [s]')
     plt.ylabel('Amplitude')
 
 def plot_spectrogram(samples, sr, title='Spectrogram'):
@@ -68,11 +69,21 @@ def plot_spectrogram(samples, sr, title='Spectrogram'):
         sr: sample rate
         title: the desired title for the graph
     '''
-    stft = np.absolute(librosa.stft(samples)) # Get the magnitude of the Short Time Fourier Transform
-    db = librosa.amplitude_to_db(stft, ref=np.max) # Convert the amplitudes to decibels
-    librosa.display.specshow(db, y_axis='linear') # Create a spectrogram with linear frequency axis
+    # Normalize all samples to 4 seconds long
+    duration = len(samples) / sr
+    if duration > 4:
+        samples = samples[:int(4*sr)]
+    elif duration < 4:
+        zeros = np.zeros((4*sr) - len(samples))
+        samples = np.hstack((samples, zeros))
+
+    # Calculate and plot spectrogram
+    S = librosa.feature.melspectrogram(samples, sr) # Short Time Fourier Transforms
+    db = librosa.power_to_db(S, ref=np.max)
+    librosa.display.specshow(db, sr=sr, x_axis='time', y_axis='mel') # Plot mel-frequency spectrogram
     plt.colorbar(format='%+2.0f dB') # Configure dB color bar
-    plt.xlabel('Time')
+    plt.xlabel('Time [s]')
+    plt.ylabel('Frequency [Hz]')
     plt.title(title)
 
 def show_all_fft(data, random=False):
