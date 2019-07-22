@@ -6,11 +6,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import h5py
 from tensorflow import keras
+from tensorflow.keras.models import load_model
 from tensorflow.keras.layers import Dense, Conv2D, Flatten, MaxPooling2D, Dropout
 from tensorflow.keras.optimizers import SGD
+from sklearn.metrics import classification_report, confusion_matrix
 
 # Set up and parse command line arguments
 parser = argparse.ArgumentParser(description='Create a video of a .wav file\'s audio spectrum')
+parser.add_argument('-L', '--loadmodel', type=str, default='', help='Name of saved .h5 model to load instead of training a new model')
 parser.add_argument('-f', '--filename', type=str, default='', help='Filename of the accuracy plot and saved model')
 parser.add_argument('-s', '--split', type=float, default=.8, help='Train : Validation split ratio (default: .8)')
 parser.add_argument('-b', '--batchsize', type=int, default=32, help='Batch size (default: 32)')
@@ -243,36 +246,87 @@ def plot_model(history, show=True, save=False, filename='accuracy.jpg'):
     if save: plt.savefig(filename)
     if show: plt.show()
 
+def plot_matrix(labels, predicted):
+    # Calculate confusion matrix
+    matrix = confusion_matrix(labels, predicted)
+
+    # Set up plot, add matrix data, and configure colormap
+    fig, ax = plt.subplots()
+    im = ax.imshow(matrix, interpolation='nearest', cmap=plt.cm.viridis)
+    ax.figure.colorbar(im, ax=ax)
+
+    # Configure plot axises
+    classes = [c.replace('_', ' ') for c in CLASSIFICATIONS]
+    ax.set(xticks=np.arange(matrix.shape[1]),
+       yticks=np.arange(matrix.shape[0]),
+       # ... and label them with the respective list entries
+       xticklabels=classes, yticklabels=classes,
+       title='Urban Sound Confusion Matrix',
+       ylabel='True label',
+       xlabel='Predicted label')
+
+    # Rotate the x-axis labels so they don't overlap
+    plt.setp(ax.get_xticklabels(), rotation=45, ha='right',
+        rotation_mode='anchor')
+
+    # Add the numbers coresponding number to each square in the matrix
+    threshold = matrix.max() / 2 # Threshold for white vs. black text due to colormap
+    for i in range(matrix.shape[0]):
+        for j in range(matrix.shape[1]):
+            ax.text(j, i, format(matrix[i, j], 'd'),
+                ha='center', va='center',
+                color='white' if matrix[i, j] < threshold else 'black')
+
+    # Display
+    fig.tight_layout()
+    plt.show()
+
 if __name__ == '__main__':
-    # Load data to their respective image directories
-    if args.load:
-        start = time.time()
-        load_data()
-        end = time.time()
-        print('Data Collection Time:', end - start)
+    # Either load or train a model
+    if args.loadmodel:
+        # Load the model
+        if args.loadmodel.endswith('.h5'):
+            model = load_model(args.loadmodel)
+        else:
+            model = load_model(args.loadmodel+'.h5')
 
-    # Use the test and validation image directories to set up data generators for training and validation.
-    train_generator = build_generator(TRAIN_IMG, args.batchsize)
-    validation_generator = build_generator(VALIDATION_IMG, args.batchsize)
-
-    # Congigure and compile a model
-    model = build_model()
-
-    # Train model
-    start = time.time()
-    history = model.fit_generator(
-        generator = train_generator,
-        steps_per_epoch = train_generator.n // train_generator.batch_size,
-        validation_data = validation_generator,
-        validation_steps = validation_generator.n // validation_generator.batch_size,
-        epochs = args.epochs
-    )
-    end = time.time()
-    print('Training Time:', end - start)
-
-    # Save model and show graph of model accuracy vs. epoch
-    if args.filename:
-        model.save(args.filename+'.h5')
-        plot_model(history, save=True, filename=args.filename+'.jpg')
+        # Still need to create a validation generator for the confusion matrix
+        validation_generator = build_generator(VALIDATION_IMG, args.batchsize)
     else:
-        plot_model(history)
+        # Load data to their respective image directories
+        if args.load:
+            start = time.time()
+            load_data()
+            end = time.time()
+            print('Data Collection Time:', end - start)
+
+        # Use the test and validation image directories to set up data generators for training and validation.
+        train_generator = build_generator(TRAIN_IMG, args.batchsize)
+        validation_generator = build_generator(VALIDATION_IMG, args.batchsize)
+
+        # Congigure and compile a model
+        model = build_model()
+
+        # Train model
+        start = time.time()
+        history = model.fit_generator(
+            generator = train_generator,
+            steps_per_epoch = train_generator.n // train_generator.batch_size,
+            validation_data = validation_generator,
+            validation_steps = validation_generator.n // validation_generator.batch_size,
+            epochs = args.epochs
+        )
+        end = time.time()
+        print('Training Time:', end - start)
+
+        # Save model and show graph of model accuracy vs. epoch
+        if args.filename:
+            model.save(args.filename+'.h5')
+            plot_model(history, save=True, filename=args.filename+'.jpg')
+        else:
+            plot_model(history)
+
+    # Show confusion matrix of model
+    validation_generator.shuffle = False
+    predicted = np.argmax(model.predict_generator(validation_generator), axis=1)
+    plot_matrix(validation_generator.classes, predicted)
