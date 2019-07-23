@@ -1,4 +1,4 @@
-import glob, os, time, uuid, argparse
+import glob, os, time, uuid, argparse, sys
 import librosa
 import librosa.display
 import numpy as np
@@ -12,7 +12,7 @@ from tensorflow.keras.optimizers import SGD
 from sklearn.metrics import classification_report, confusion_matrix
 
 # Set up and parse command line arguments
-parser = argparse.ArgumentParser(description='Create a video of a .wav file\'s audio spectrum')
+parser = argparse.ArgumentParser(description='Create a classifier for various urban sounds')
 parser.add_argument('-L', '--loadmodel', type=str, default='', help='Name of saved .h5 model to load instead of training a new model')
 parser.add_argument('-f', '--filename', type=str, default='', help='Filename of the accuracy plot and saved model')
 parser.add_argument('-s', '--split', type=float, default=.8, help='Train : Validation split ratio (default: .8)')
@@ -31,11 +31,6 @@ parser.add_argument('--no-load', dest='load', action='store_false', help='Preven
 parser.add_argument('--no-normalize', dest='normalize', action='store_false', help='Prevents audio clips from being normalized to four seconds')
 parser.add_argument('--no-color', dest='color', action='store_false', help='Forces the images to be saved as grayscale')
 args = parser.parse_args()
-
-# Show all arguments
-for key, value in vars(args).items():
-    print(key, '=', value)
-print()
 
 # Global variables
 TRAIN_PATH = './train/train/'
@@ -282,16 +277,19 @@ def plot_matrix(labels, predicted):
     plt.show()
 
 if __name__ == '__main__':
+    # Show all arguments
+    for key, value in vars(args).items():
+        print(key, '=', value)
+    print()
+    user_input = input('Is this configuration okay? ([Y]/N) ')
+    if user_input.startswith('n') or user_input.startswith('N'):
+        sys.exit()
+
     # Either load or train a model
     if args.loadmodel:
         # Load the model
-        if args.loadmodel.endswith('.h5'):
-            model = load_model(args.loadmodel)
-        else:
-            model = load_model(args.loadmodel+'.h5')
-
-        # Still need to create a validation generator for the confusion matrix
-        validation_generator = build_generator(VALIDATION_IMG, args.batchsize)
+        model_path = args.loadmodel if args.loadmodel.endswith('.h5') else args.loadmodel+'.h5'
+        model = load_model(model_path)
     else:
         # Load data to their respective image directories
         if args.load:
@@ -326,7 +324,10 @@ if __name__ == '__main__':
         else:
             plot_model(history)
 
-    # Show confusion matrix of model
-    validation_generator.shuffle = False
+    # Print accuracy and show confusion matrix of model
+    validation_generator = build_generator(VALIDATION_IMG, args.batchsize)
+    validation_generator.shuffle = False # Need a fresh generator with no shuffling
+    accuracy = model.evaluate_generator(validation_generator)[1]
+    print('Accuracy: {}%'.format(int(accuracy*100)))
     predicted = np.argmax(model.predict_generator(validation_generator), axis=1)
     plot_matrix(validation_generator.classes, predicted)
