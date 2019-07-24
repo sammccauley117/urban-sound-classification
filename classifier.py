@@ -1,4 +1,5 @@
 import glob, os, time, uuid, argparse, sys
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import librosa
 import librosa.display
 import numpy as np
@@ -10,6 +11,8 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.layers import Dense, Conv2D, Flatten, MaxPooling2D, Dropout
 from tensorflow.keras.optimizers import SGD
 from sklearn.metrics import classification_report, confusion_matrix
+import logging
+logging.getLogger('tensorflow').disabled = True
 
 # Set up and parse command line arguments
 parser = argparse.ArgumentParser(description='Create a classifier for various urban sounds')
@@ -21,7 +24,7 @@ parser.add_argument('-k', '--kernel', nargs='+', type=int, default=[6,6], help='
 parser.add_argument('-p', '--pool', nargs='+', type=int, default=[2,2], help='Max pooling size (defualt: (2,2))')
 parser.add_argument('-d', '--dropout', type=float, default=.5, help='Dropout threshold (default: .5)')
 parser.add_argument('-l', '--learningrate', type=float, default=.001, help='Learning rate (default: .001)')
-parser.add_argument('-e', '--epochs', type=int, default=512, help='Number of epochs (default: 512)')
+parser.add_argument('-e', '--epochs', type=int, default=1024, help='Number of epochs (default: 512)')
 parser.add_argument('-N', '--noise', type=float, default=0, help='How much noise to add to the training data (default: 0)')
 parser.add_argument('-P', '--pitch', type=float, default=0, help='Amplitude of pitch shifting applied to the data (default: 0)')
 parser.add_argument('--load', default=True)
@@ -92,8 +95,8 @@ def load_wave(num, path=TRAIN_PATH):
     '''
     Description: loads a specific .wav file from the path. Example load_wave(5) loads 5.wav
     Args:
-        index: number of which .wav file to load
-        path: root path (ex: ./train/train/)
+        num: number of which .wav file to load
+        path: root path (ex: ./train/train/) of where to load the file from
     Returns:
         samples: a np.array of the .wav file sample data
         sr: the sample rate of the recording
@@ -119,9 +122,10 @@ def save_spectrogram(num=None, samples=None, sr=None, classification=None, dir='
     Description: saves spectrogram image of the given file index to the correct classification subfolder
     Args:
         num: id of which file to load (ex: if 2 is passed then 2.wav is loaded)
+        samples: .wav file samples
+        sr: sample rate
         classification: the label of the sound - this determines which subdirectory the spectrogram image goes to
         dir: which directory to save the image to (ex: './train_img/')
-        normalize: length in time to normalize the sample to--does not normalize if None
     TODO: right now the pixel settings aren't working right: 384x128 is actually saved as 297x98
     '''
     # Variable initialization
@@ -242,6 +246,12 @@ def plot_model(history, show=True, save=False, filename='accuracy.jpg'):
     if show: plt.show()
 
 def plot_matrix(labels, predicted):
+    '''
+    Description: shows a graph of a convolutional matrix of a model
+    Args:
+        labels: np.array of actually answers
+        predicted: np.array of a models predictions
+    '''
     # Calculate confusion matrix
     matrix = confusion_matrix(labels, predicted)
 
@@ -272,18 +282,21 @@ def plot_matrix(labels, predicted):
                 ha='center', va='center',
                 color='white' if matrix[i, j] < threshold else 'black')
 
-    # Display
+    # Save and/or display
+    if args.filename:
+        plt.savefig(args.filename+'-cm.png')
     fig.tight_layout()
     plt.show()
 
 if __name__ == '__main__':
-    # Show all arguments
+    # Show all arguments and confirm with user that the configuration is acceptable
     for key, value in vars(args).items():
         print(key, '=', value)
     print()
     user_input = input('Is this configuration okay? ([Y]/N) ')
     if user_input.startswith('n') or user_input.startswith('N'):
         sys.exit()
+    print()
 
     # Either load or train a model
     if args.loadmodel:
@@ -320,7 +333,7 @@ if __name__ == '__main__':
         # Save model and show graph of model accuracy vs. epoch
         if args.filename:
             model.save(args.filename+'.h5')
-            plot_model(history, save=True, filename=args.filename+'.jpg')
+            plot_model(history, save=True, filename=args.filename+'-acc.png')
         else:
             plot_model(history)
 
