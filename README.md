@@ -1,5 +1,5 @@
 # Urban Sound Classification
-This repository is for my first Kaggle challenge. The link to the original dataset can be found [here](https://www.kaggle.com/papeloto/urban-sound-feature-extraction-knn). The dataset has more than 8000 classified sound-bites or urban sounds. There are 10 different classifications:
+This repository is for my first Kaggle challenge. The original dataset has more than 8000 classified sound-bites of urban sounds. There are 10 different classifications:
 
 1. Air conditioner
 1. Car horn
@@ -14,29 +14,62 @@ This repository is for my first Kaggle challenge. The link to the original datas
 
 My goal is to use signal processing and machine learning techniques to create a model that can accurately classify these sounds.
 
+If you would like to experiment with the model, clone this project, download the data and run:
+```bash
+C:/.../urban-sound-classification> classifier -h
+```
+This will show you a list of all configurable options on running the model. For example, you can tweak parameters of the model such as learning rate, kernel size, dropout, epochs, color mode, whether or not to add noise, and much more.
+
 ## Visualization
-The first step in creating a good classifier for our data is to get a good idea of what the data looks like in the first place. Viewing these depictions will help determine which features will be useful in classification. For each classification type we will observe:
+The first step in creating a good classifier for our data is to get a thorough idea of what the data looks like in the first place. Viewing these depictions will help determine which features will be useful in classification. For each classification type we will observe:
 1. Time Domain
 1. Frequency Domain
 1. Spectrogram
 
 ### Time Domain
-Wave files store the audio data as a series of audio samples at a given frequency. Thus, graphing the Time Domain (time v. amplitude) is quite straight forward. The x-axis limits were set to (0,4) and y-axis to (-1,1) so that each graph would retain the same scale.
+Wave files store the audio data as a series of audio samples at a given sample rate. Thus, graphing the Time Domain (time v. amplitude) is quite straight forward--we're essentially just graphing the .wav file itself. The x-axis limits were set to (0,4) since each .wav file in our dataset was between 0 and 4 seconds long and the y-axis limited to (-1,1) so that each graph would retain the same scale.
 <p align="center">
   <img src="./img/time_domain.png" width="800">
 </p>
 
 ### Frequency Domain
-By taking the Fast Fourier Transform of the samples, we can get the frequency domain. The frequency domain contains information on how much of each frequency band is present in our audio sample. The result of the FFT is complex but since we don't care about phase information we just take the absolute value to get the magnitude of each frequency band. All magnitudes are divided by the total number of samples in the audio in order to normalize them. Since these are real valued signals, we only take the first half of the spectrum. Finally, due to the Nyquist condition, the frequency range will be from 0 Hz to half of the sample rate.
+By taking the Fourier Transform of the samples, we can get the frequency domain. The frequency domain contains information on how much of each frequency band is present in our audio sample. The result of the FFT is complex but since we don't care about phase information we just take the absolute value to get the magnitude of each frequency band. All magnitudes are divided by the total number of samples in the audio in order to normalize them. Due to the Nyquist condition, the frequency range will be from 0 Hz to half of the sample rate.
 <p align="center">
   <img src="./img/frequency_domain.png" width="800">
 </p>
 
 ### Spectrogram
-Finally, we will look at spectrograms of each classification. A spectrogram calculates the Fourier Transform over small snippets of the audio sample. The Fourier Transforms give us the magnitude (in this case converted to dB) with respect to frequency, but since they are taken over small time windows we also retain some time based information. Thus, we end up with a chart that shows us three different variables: frequency, magnitude, *and* time.
+Finally, we will look at spectrograms of each classification. A spectrogram calculates the Fourier Transform over small snippets of the audio clip, as opposed to the entire clip. The Fourier Transforms give us the magnitude (in this case converted to dB) with respect to frequency, but since they are taken over small time windows we also retain some time based information. Thus, we end up with a chart that shows us three different variables: frequency, magnitude, *and* time. All clips were normalized to four seconds long in order to retain the same scale. In addition, instead of doing a linear frequency axis the [mel scale](https://en.wikipedia.org/wiki/Mel_scale) was used to better represent human hearing.
 <p align="center">
   <img src="./img/Spectrogram.png" width="800">
 </p>
 
 ### Data Summary
-After viewing the data in multiple different forms, it is clear that the spectrogram conveys the most information. The time and frequency domains are powerful and valuable representations, but they each only show two dimensions of a three dimensional problem. The spectrogram, on the other hand, has all three dimensions: time, frequency, and magnitude. Ultimately, spectrograms convey the densest representation of our data. Thus, I believe that applying a Convolutional Neural Network to the spectrograms images would yield us high success.
+After viewing the data in multiple different forms, it is clear that the spectrogram conveys the most information. The time and frequency domains are powerful and valuable representations, but they each only show two dimensions of a three dimensional problem. The spectrogram, on the other hand, has all three dimensions: time, frequency, and magnitude. Ultimately, spectrograms convey the densest representation of our data.
+
+## Machine Learning Model
+Since spectrogram images are such a good representation of our images, we will be using them as inputs to a convolutional neural network--a machine learning configuration that is notoriously good at classifying images. Unlike typical neural networks that have input vectors, the input to our neural network will be a matrix of pixels (an image). Simply put, each neuron in a convolution layer has a kernel slide over this matrix and preforms a convolution operation. The goal is to find kernels that detect features in the image. For an in depth explanation of convolutional neural networks, check out [this](https://www.youtube.com/watch?v=py5byOOHZM8) YouTube video and/or [this](https://medium.com/technologymadeeasy/the-best-explanation-of-convolutional-neural-networks-on-the-internet-fbb8b1ad5df8) Medium article.
+
+<p align="center">
+  <img src="./img/cnn.jpg" width="800">
+</p>
+
+After much experimentation, I found that a good convolution network configuration for spectrogram classification can be structured as so:
+```python
+model = keras.Sequential()
+model.add(Conv2D(16, kernel_size=(6,6), activation='relu', input_shape=(77,77)))
+model.add(MaxPooling2D(pool_size=(2,2)))
+model.add(Dropout(.2))
+model.add(Conv2D(32, kernel_size=(6,6), activation='relu'))
+model.add(MaxPooling2D(pool_size=(2,2)))
+model.add(Dropout(.5))
+model.add(Conv2D(64, kernel_size=kernel_size, activation='relu'))
+model.add(MaxPooling2D(pool_size=pool_size))
+model.add(Dropout(.5))
+model.add(Flatten())
+model.add(Dense(64, activation='relu'))
+model.add(Dense(128, activation='relu'))
+model.add(Dense(10, activation='softmax'))
+optimizer = SGD(lr=.001)
+model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
+```
