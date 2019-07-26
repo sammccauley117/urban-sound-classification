@@ -30,9 +30,11 @@ parser.add_argument('-P', '--pitch', type=float, default=0, help='Amplitude of p
 parser.add_argument('--load', default=True)
 parser.add_argument('--normalize', default=True)
 parser.add_argument('--color', default=True)
+parser.add_argument('--test', default=True)
 parser.add_argument('--no-load', dest='load', action='store_false', help='Prevents the image directories from being overwritten')
 parser.add_argument('--no-normalize', dest='normalize', action='store_false', help='Prevents audio clips from being normalized to four seconds')
 parser.add_argument('--no-color', dest='color', action='store_false', help='Forces the images to be saved as grayscale')
+parser.add_argument('--no-test', dest='test', action='store_false', help='Prevents the test directory images from being loaded or saved')
 args = parser.parse_args()
 
 # Global variables
@@ -40,6 +42,9 @@ TRAIN_PATH = './train/train/'
 TRAIN_INDEX = './train/train.csv'
 TRAIN_IMG = './train_img/'
 VALIDATION_IMG = './validation_img/'
+TEST_PATH = './test/test/'
+TEST_INDEX = './test/test.csv'
+TEST_IMG = './test_img/'
 CLASSIFICATIONS = ['air_conditioner', 'car_horn', 'children_playing', 'dog_bark',
     'drilling', 'engine_idling', 'gun_shot', 'jackhammer', 'siren', 'street_music']
 NORMALIZE_LEN = 4
@@ -90,6 +95,17 @@ def load_data():
         save_spectrogram(samples=samples, sr=sr, num=row['ID'], classification=row['Class'], dir=VALIDATION_IMG)
         m += 1
         if m % 10 == 0: print('Validation Progress:', m, '/', int(len(data)*(1-args.split)))
+
+    # Load the test data and save their spectrograms
+    if args.test:
+        test_data = pd.read_csv(TEST_INDEX)
+        init_directory(TEST_IMG, False) # Don't create subdirectories for classifications
+        m = 0 # Used for progress updates
+        for i, row in test_data.iterrows():
+            samples, sr = load_wave(row['ID'], TEST_PATH)
+            save_spectrogram(samples=samples, sr=sr, num=row['ID'], dir=TEST_IMG)
+            m += 1
+            if m % 10 == 0: print('Test Progress:', m, '/', len(test_data))
 
 def load_wave(num, path=TRAIN_PATH):
     '''
@@ -154,24 +170,30 @@ def save_spectrogram(num=None, samples=None, sr=None, classification=None, dir='
     plt.savefig(path, bbox_inches='tight',pad_inches=0)
     plt.close(fig) # Need to close to prevent unecessary memory consumtion
 
-def init_directory(dir):
+def init_directory(dir, classes=True):
     '''
     Description: initializes the image container directories and its classification subdirectories for training
     Args:
         dir: path to the directory (ex: './train_img/')
+        classes: whether or not to create subfolders for each classification
     '''
     # Make the root directory if necessary
     if not os.path.isdir(dir): os.mkdir(dir)
 
     # Check if each classification directory exists. If it does, delete all the images in the directory.
     # If the classification directory does not exist, then create one.
-    for classification in CLASSIFICATIONS:
-        if os.path.isdir(dir+classification):
-            files = glob.glob(dir+classification+'/*')
-            for file in files:
-                os.remove(file)
-        else:
-            os.mkdir(dir+classification)
+    if classes:
+        for classification in CLASSIFICATIONS:
+            if os.path.isdir(dir+classification):
+                files = glob.glob(dir+classification+'/*')
+                for file in files:
+                    os.remove(file)
+            else:
+                os.mkdir(dir+classification)
+    else: # Still need to clear the files in the directory
+        files = glob.glob(dir+'/*')
+        for file in files:
+            os.remove(file)
 
 def build_generator(dir, batch_size):
     '''
