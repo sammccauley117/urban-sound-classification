@@ -16,7 +16,7 @@ My goal is to use signal processing and machine learning techniques to create a 
 
 If you would like to experiment with the model, clone this project, download the data and run:
 ```bash
-C:/.../urban-sound-classification> classifier -h
+C:/.../urban-sound-classification> classifier.py -h
 ```
 This will show you a list of all configurable options on running the model. For example, you can tweak parameters of the model such as learning rate, kernel size, dropout, epochs, color mode, whether or not to add noise, and much more.
 
@@ -73,3 +73,27 @@ model.add(Dense(10, activation='softmax'))
 optimizer = SGD(lr=.001)
 model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
 ```
+
+## Feature Extraction
+Spectrograms were always the input to the convolutional neural network, however there are various ways we can manipulate the data shown in the spectrogram. Tests were ran on each variation with the same configuration as above. The different ways that the features were extracted were:
+
+* **Colored Images**: the saved images are fully colored RGB, thus the input to the convolutional neural network was actually a 3 channeled tensor--a red channel, green channel, and a blue channel. Therefore, the input was 3x77x77.
+* **Grayscale Images**: the saved images are saved in grayscale, resulting in only one color channel: a matrix of 1x77x77.
+* **No Time Normalization**: By default, if an audio clip is less than 4 seconds long, it is normalized to be 4 seconds by adding silence to the clip. Without normalization, there are less Short Time Fourier Transforms on the data and the image is ultimately stretched out to the proper image size.
+* **Added Noise**: in this method, we double our training size. Two images are saved for each audio clip in our training data, one regular/default image, and another where a small amount of noise is added to the audio. This increases training time by about 2.5x that of the first three.
+* **Pitch Shifting**: similar to the added noise, a default image is saved as well as an additional one where the audio is randomly pitch shifted up or down. This also increases training time by about 2.5x that of the first three.
+
+## Results
+The results were not what I expected. The colored images ended up being the best for training with a validation accuracy of 92%. However, the other methods were only slightly behind: non-normalized at 88% and grayscale, added noise, and pitch shifting all resulted in a model with 89% accuracy. The difference between the various forms of feature extraction were negligible. I suppose this makes sense from an *information theory* standpoint since we weren't actually adding any new, valuable data to any of the forms of extraction. I was hoping that by pitch shifting or removing normalization the network would be forced to look for deeper correlations, but I was wrong. Ultimately, the colored images yielded the highest success in terms of accuracy and training speed. A graph of its training history can be seen below:
+
+<p align="center">
+  <img src="./img/model.png" width="800">
+</p>
+
+The confusion matrix is the most telling. All feature extraction methods looked similar, but the default/color image one is shown below. The models commonly mistook the screeches and hollers of children as *music*. However, upon closer inspection this is likely due to bad data. In many audio recordings of the street music you can hear people talking and laughing. In some of the recording of children playing, music can be heard. The classification overlap can be confusing even for a human and prevented the models from achieving higher accuracy.
+
+<p align="center">
+  <img src="./img/confusion_matrix.png" width="800">
+</p>
+
+Overall, this project was a great introduction to both convolutional neural network as well as applying various concepts of signal processing and data science. From all of this, it has become increasingly more clear to me why machine hearing hasn't matched the same rate of growth as machine vision. Most current machine hearing uses the same spectrogram technique that was used in this project. I find it odd that we have to use machine vision for machine hearing. It seems like we're looking at the problem in the wrong way--surely spectrograms *images* aren't the best representation of *sound*. Though it's true that images and sound are both just arbitrary representations of data, it still feels like we're missing an important puzzle piece when it comes to machine hearing. Either way it's a fun problem to think about.
