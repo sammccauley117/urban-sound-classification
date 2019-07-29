@@ -15,10 +15,22 @@ This repository is for my first Kaggle challenge. The original dataset has more 
 My goal is to use signal processing and machine learning techniques to create a model that can accurately classify these sounds.
 
 If you would like to experiment with the model, clone this project, download the data and run:
+
 ```bash
 C:/.../urban-sound-classification> classifier.py -h
 ```
+
 This will show you a list of all configurable options on running the model. For example, you can tweak parameters of the model such as learning rate, kernel size, dropout, epochs, color mode, whether or not to add noise, and much more.
+
+**Update:** apparently the original Kaggle post/dataset was deleted *days* before I completed this. Therefore, I can't verify my accuracy on the test set but I can still build a strong model with the training data. For anyone who wants to try experimenting with this project and needs the dataset, I put it on my Google Drive [here](https://drive.google.com/drive/folders/1MX0pjSuiXMfHeNdHJA1lckIB9H_Q5B9l?usp=sharing).
+
+## File Appendix
+
+|Filename|Description|
+|:-:|:-|
+|visualization.py|Shows a sample of each classification in different forms: time domain, frequency domain, and as a spectrogram.|
+|classifier.py|Creates a convolutional neural network model to classify the various sounds with many command line configurable hyperparameters.|
+|predict.py|Loads a model, plays a sound from the `test/` directory, and predicts what the sound is.|
 
 ## Visualization
 The first step in creating a good classifier for our data is to get a thorough idea of what the data looks like in the first place. Viewing these depictions will help determine which features will be useful in classification. For each classification type we will observe:
@@ -75,11 +87,11 @@ model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['ac
 ```
 
 ## Feature Extraction
-Spectrograms were always the input to the convolutional neural network, however there are various ways we can manipulate the data shown in the spectrogram. Tests were ran on each variation with the same configuration as above. The different ways that the features were extracted were:
+Spectrograms were always the input to the convolutional neural network, however there are various ways we can manipulate the data shown in the spectrogram. Tests were ran on each variation with the same network configuration as above. The different ways that the features were extracted were:
 
 * **Colored Images**: the saved images are fully colored RGB, thus the input to the convolutional neural network was actually a 3 channeled tensor--a red channel, green channel, and a blue channel. Therefore, the input was 3x77x77.
 * **Grayscale Images**: the saved images are saved in grayscale, resulting in only one color channel: a matrix of 1x77x77.
-* **No Time Normalization**: By default, if an audio clip is less than 4 seconds long, it is normalized to be 4 seconds by adding silence to the clip. Without normalization, there are less Short Time Fourier Transforms on the data and the image is ultimately stretched out to the proper image size.
+* **No Time Normalization**: By default, if an audio clip is less than 4 seconds long, it is normalized to be 4 seconds by adding silence to the clip. Without normalization, there are less Short Time Fourier Transforms on the data and the image is then stretched out to the proper image size.
 * **Added Noise**: in this method, we double our training size. Two images are saved for each audio clip in our training data, one regular/default image, and another where a small amount of noise is added to the audio. This increases training time by about 2.5x that of the first three.
 * **Pitch Shifting**: similar to the added noise, a default image is saved as well as an additional one where the audio is randomly pitch shifted up or down. This also increases training time by about 2.5x that of the first three.
 
@@ -96,4 +108,4 @@ The confusion matrix is the most telling. All feature extraction methods looked 
   <img src="./img/confusion_matrix.png" width="800">
 </p>
 
-Overall, this project was a great introduction to both convolutional neural network as well as applying various concepts of signal processing and data science. From all of this, it has become increasingly more clear to me why machine hearing hasn't matched the same rate of growth as machine vision. Most current machine hearing uses the same spectrogram technique that was used in this project. I find it odd that we have to use machine vision for machine hearing. It seems like we're looking at the problem in the wrong way--surely spectrograms *images* aren't the best representation of *sound*. Though it's true that images and sound are both just arbitrary representations of data, it still feels like we're missing an important puzzle piece when it comes to machine hearing. Either way it's a fun problem to think about.
+Overall, this project was a great introduction to both convolutional neural networks as well as applying various concepts of signal processing and data science. From all of this, it has become increasingly more clear to me why machine hearing hasn't matched the same rate of growth as machine vision. Most current machine hearing uses the same spectrogram technique that was used in this project. I find it odd that we have to use machine vision for machine hearing. It seems like we're looking at the problem in the wrong way--surely spectrograms *images* aren't the best representation of *sound*. Though it's true that images and sound are both just arbitrary representations of data, it still feels like we're missing an important puzzle piece when it comes to machine hearing. Either way it's a fun problem to think about.
